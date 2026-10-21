@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% set active = 'settings' %}
+{% block title %}ESP 32 RGB Controller — Settings{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Settings</h1>
+    <p>Every change applies immediately — there is no save button.</p>
+</div>
+
+<div class="tabs">
+    <button class="tab active" data-tab="device">Device</button>
+    <button class="tab" data-tab="performance">Performance</button>
+    <button class="tab" data-tab="music">Music</button>
+    <button class="tab" data-tab="screen">Screen</button>
+    <button class="tab" data-tab="about">About</button>
+</div>
+
+<!-- DEVICE -->
+<div class="tab-panel active" id="tab-device">
+    <div class="settings-grid">
+        <div class="panel">
+            <h2>Connection</h2>
+
+            <div class="field">
+                <label for="ipInput">WLED device address</label>
+                <input type="text" id="ipInput" placeholder="192.168.1.34 or wled.local" spellcheck="false">
+            </div>
+
+            <div class="field">
+                <label for="ledCount">Number of LEDs</label>
+                <input type="number" id="ledCount" min="1" max="512" step="1">
+            </div>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+                <button class="btn btn-primary" id="testBtn">Test connection</button>
+                <button class="btn" id="detectBtn">Auto-detect</button>
+            </div>
+
+            <p class="panel-note" style="margin-top:16px;">
+                Test flashes the strip red three times. The controller keeps retrying
+                in the background, so the device reconnects on its own after a power cycle.
+            </p>
+        </div>
+
+        <div class="panel">
+            <h2>Device status</h2>
+            <div class="info-list">
+                <div class="info-row"><span>State</span><span id="devState">—</span></div>
+                <div class="info-row"><span>Firmware</span><span id="devVersion">—</span></div>
+                <div class="info-row"><span>LEDs reported</span><span id="devLeds">—</span></div>
+                <div class="info-row"><span>WiFi signal</span><span id="devSignal">—</span></div>
+                <div class="info-row"><span>IP address</span><span id="devIp">—</span></div>
+                <div class="info-row"><span>Uptime</span><span id="devUptime">—</span></div>
+            </div>
+            <p class="panel-note" style="margin-top:16px;" id="devError"></p>
+        </div>
+    </div>
+</div>
+
+<!-- PERFORMANCE -->
+<div class="tab-panel" id="tab-performance">
+    <div class="settings-grid">
+        <div class="panel">
+            <h2>Rotation</h2>
+
+            <div class="field">
+                <label>Seconds per metric <span class="range-value" id="cycleValue">5.0</span></label>
+                <input type="range" id="cycleSlider" min="2" max="20" step="0.5" value="5">
+            </div>
+
+            <div class="field">
+                <label>High-usage warning <span class="range-value" id="thresholdValue">90%</span></label>
+                <input type="range" id="thresholdSlider" min="50" max="100" step="1" value="90">
+            </div>
+
+            <p class="panel-note">
+                The strip cycles CPU → RAM → GPU, showing each metric's colour for the
+                chosen duration. At or above the warning threshold it turns solid red.
+            </p>
+
+            <h2 style="margin-top:26px;">Output brightness</h2>
+            <div class="field">
+                <label class="check-row" for="dimWithLoad">
+                    <input type="checkbox" id="dimWithLoad">
+                    <span>Dim brightness with load</span>
+                </label>
+                <p class="field-hint">
+                    Off: each metric shows exactly the colour picked in its ramp.
+                    On: the colour is also scaled between the minimum and maximum below.
+                </p>
+            </div>
+            <div class="field">
+                <label>Minimum <span class="range-value" id="briMinValue">20</span></label>
+                <input type="range" id="briMin" min="0" max="255" step="1" value="20">
+            </div>
+            <div class="field">
+                <label>Maximum <span class="range-value" id="briMaxValue">255</span></label>
+                <input type="range" id="briMax" min="0" max="255" step="1" value="255">
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Metric colours</h2>
+            <p class="panel-note" style="margin-top:-8px;">
+                Three stops per hardware metric: the colour shown at 0%, 50%
+                and 100% load. Values in between blend through hue, so blue →
+                yellow passes through green at 25%.
+            </p>
+
+            <div class="ramp-editor">
+                <div class="ramp-head">
+                    <strong>CPU</strong>
+                    <span class="ramp-preview" id="cpuRampPreview"></span>
+                </div>
+                <div class="ramp-stops">
+                    <label>0%<input type="color" id="cpuColor0" value="#00DC46"></label>
+                    <label>50%<input type="color" id="cpuColor50" value="#FFBE00"></label>
+                    <label>100%<input type="color" id="cpuColor100" value="#FF1E14"></label>
+                </div>
+            </div>
+
+            <div class="ramp-editor">
+                <div class="ramp-head">
+                    <strong>RAM</strong>
+                    <span class="ramp-preview" id="ramRampPreview"></span>
+                </div>
+                <div class="ramp-stops">
+                    <label>0%<input type="color" id="ramColor0" value="#003CA0"></label>
+                    <label>50%<input type="color" id="ramColor50" value="#0064DC"></label>
+                    <label>100%<input type="color" id="ramColor100" value="#008CFF"></label>
+                </div>
+            </div>
+
+            <div class="ramp-editor">
+                <div class="ramp-head">
+                    <strong>GPU</strong>
+                    <span class="ramp-preview" id="gpuRampPreview"></span>
+                </div>
+                <div class="ramp-stops">
+                    <label>0%<input type="color" id="gpuColor0" value="#46008C"></label>
+                    <label>50%<input type="color" id="gpuColor50" value="#8223C8"></label>
+                    <label>100%<input type="color" id="gpuColor100" value="#BE46FF"></label>
+                </div>
+            </div>
+
+            <p class="panel-note" style="margin-top:16px;">
+                At or above the high-usage warning the strip turns solid red,
+                regardless of these ramps. GPU is skipped automatically when no
+                GPU is detected.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- MUSIC -->
+<div class="tab-panel" id="tab-music">
+    <div class="settings-grid">
+        <div class="panel">
+            <h2>Visuals</h2>
+
+            <div class="field">
+                <label for="musicRenderer">Effect</label>
+                <select id="musicRenderer">
+                    <option value="spectrum">Spectrum bars</option>
+                    <option value="mirror_spectrum">Mirror spectrum</option>
+                    <option value="bass_pulse">Bass pulse</option>
+                    <option value="vu_meter">VU meter</option>
+                    <option value="beat_pulse">Beat pulse</option>
+                    <option value="beat_flash">Beat flash</option>
+                    <option value="beat_spectrum">Beat spectrum</option>
+                    <option value="rainbow">Rainbow</option>
+                    <option value="mid_wave">Mid-frequency wave</option>
+                    <option value="energy_ripple">Energy ripple</option>
+                    <option value="comet">Comet</option>
+                    <option value="duo_tone">Duo tone (bass / treble)</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label>Colour palette</label>
+                <div class="palette-list" id="musicPaletteList"></div>
+            </div>
+
+            <div class="field hidden-field" id="customPaletteFields">
+                <label>Two-colour mix</label>
+                <div class="color-pair">
+                    <label class="color-field" title="First colour">
+                        <input type="color" id="musicColorFrom" value="#0078FF">
+                        <span>From</span>
+                    </label>
+                    <label class="color-field" title="Second colour">
+                        <input type="color" id="musicColorTo" value="#FF2850">
+                        <span>To</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>Frame rate <span class="range-value" id="musicFpsValue">60</span></label>
+                <input type="range" id="musicFps" min="15" max="60" step="5" value="60">
+            </div>
+
+            <div class="field">
+                <label>Beat sensitivity <span class="range-value" id="musicSensValue">1.6</span></label>
+                <input type="range" id="musicSens" min="1.0" max="3.0" step="0.1" value="1.6">
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Audio</h2>
+
+            <div class="field">
+                <label for="musicSource">Source</label>
+                <select id="musicSource">
+                    <option value="system">System audio (loopback)</option>
+                    <option value="mic">Microphone</option>
+                </select>
+            </div>
+
+            <div class="info-list">
+                <div class="info-row"><span>Capture device</span><span id="audioDevice">—</span></div>
+                <div class="info-row"><span>State</span><span id="audioState">—</span></div>
+                <div class="info-row"><span>Bass</span><span id="audioBass">—</span></div>
+                <div class="info-row"><span>Mid</span><span id="audioMid">—</span></div>
+                <div class="info-row"><span>Treble</span><span id="audioTreble">—</span></div>
+            </div>
+
+            <p class="panel-note" style="margin-top:16px;">
+                Loopback captures exactly what Windows is playing, so headphones work too.
+                The strip stays dark whenever no sound is detected.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- SCREEN -->
+<div class="tab-panel" id="tab-screen">
+    <div class="settings-grid">
+        <div class="panel">
+            <h2>Mapping</h2>
+
+            <div class="field">
+                <label for="screenMode">Mode</label>
+                <select id="screenMode">
+                    <option value="dominant">Dominant colour</option>
+                    <option value="average">Average colour</option>
+                    <option value="bands">Vertical bands</option>
+                    <option value="edges">Edge zones</option>
+                </select>
+            </div>
+
+            <p class="panel-note">
+                <strong>Dominant colour</strong> picks the most vivid colour on screen.
+                Whites, greys and blacks are ignored, so a green page element reads
+                green instead of washing out to white.
+                <strong>Average</strong> uses the screen's colourful pixels for the
+                hue, so a white page with a strong accent still shows that accent.
+                Colour changes ease in over about a tenth of a second.
+            </p>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="screenMonitor">Monitor</label>
+                    <input type="number" id="screenMonitor" min="1" max="4" step="1">
+                </div>
+                <div class="field">
+                    <label>Frame rate <span class="range-value" id="screenFpsValue">30</span></label>
+                    <input type="range" id="screenFps" min="10" max="60" step="1" value="30">
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Capture status</h2>
+            <div class="info-list">
+                <div class="info-row"><span>State</span><span id="screenState">—</span></div>
+                <div class="info-row"><span>Actual frame rate</span><span id="screenActual">—</span></div>
+                <div class="info-row"><span>Frames captured</span><span id="screenFrames">—</span></div>
+            </div>
+            <p class="panel-note" style="margin-top:16px;">
+                Screen capture only runs while Screen mode is selected, so it costs
+                nothing the rest of the time.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- ABOUT -->
+<div class="tab-panel" id="tab-about">
+    <div class="panel about-card">
+        <div class="about-mark">⚡</div>
+        <h2>ESP 32 RGB Controller</h2>
+        <span class="about-version">Version 2.0</span>
+
+        <p>
+            A custom PC-synced lighting controller built on top of WLED, enabling
+            real-time system performance, music-reactive and screen-reactive lighting
+            without additional hardware.
+        </p>
+
+        <p class="about-by"><strong>Made by Asif</strong></p>
+
+        <p class="about-tech">
+            Built for WLED 16.0.1 compatible devices<br>
+            Powered by Flask · psutil · soundcard · numpy · WLED JSON API
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='settings.js') }}"></script>
+{% endblock %}

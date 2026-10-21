@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Local settings and runtime state (created automatically on first run)
+config.json
+controller.lock
+controller.log
+controller_console.log
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

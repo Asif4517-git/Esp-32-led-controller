@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% set active = 'custom' %}
+{% block title %}ESP 32 RGB Controller — Custom{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Custom</h1>
+    <p>Pick a colour, choose an effect, and it applies instantly.</p>
+</div>
+
+<div class="custom-layout">
+    <!-- LEFT: colour picker -->
+    <section class="panel picker-panel">
+        <h2>Colour</h2>
+
+        <div class="wheel-wrap">
+            <canvas id="colorWheel" width="260" height="260"></canvas>
+            <div class="wheel-cursor" id="wheelCursor"></div>
+        </div>
+
+        <div class="field">
+            <label>Brightness <span class="range-value" id="briValue">128</span></label>
+            <input type="range" id="briSlider" min="1" max="255" value="128">
+        </div>
+
+        <div class="swatches" id="swatches"></div>
+
+        <div class="hex-row">
+            <input type="text" id="hexInput" maxlength="7" value="#FF0000" spellcheck="false">
+            <div class="color-chip" id="colorChip"></div>
+        </div>
+    </section>
+
+    <!-- CENTER: effects -->
+    <section class="panel effects-panel">
+        <h2>Effect mode</h2>
+        <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="text" id="effectSearch" placeholder="Search effects…">
+        </div>
+        <div class="effect-list" id="effectList">
+            <div class="effect-loading">Loading effects from WLED…</div>
+        </div>
+    </section>
+
+    <!-- RIGHT: parameters -->
+    <section class="panel params-panel">
+        <h2>Parameters</h2>
+
+        <div class="field">
+            <label>Palette</label>
+            <div class="palette-list" id="paletteList">
+                <div class="effect-loading">Loading palettes…</div>
+            </div>
+            <p class="field-hint">
+                A palette recolours most effects and overrides the colour wheel.
+                Picking a colour switches back to Default.
+            </p>
+        </div>
+
+        <div class="field">
+            <div class="slider-head">
+                <label for="speedSlider">Effect speed</label>
+                <div class="slider-tools">
+                    <span class="range-value" id="speedValue">128</span>
+                    <button class="reco-chip" id="speedReco" type="button">
+                        <span class="reco-icon">✦</span>
+                        <span class="reco-label">Recommended</span>
+                        <span class="reco-value" id="speedRecoValue">—</span>
+                    </button>
+                </div>
+            </div>
+            <input type="range" id="speedSlider" min="0" max="255" value="128">
+        </div>
+
+        <div class="field">
+            <div class="slider-head">
+                <label for="intensitySlider">Intensity</label>
+                <div class="slider-tools">
+                    <span class="range-value" id="intensityValue">128</span>
+                    <button class="reco-chip" id="intensityReco" type="button">
+                        <span class="reco-icon">✦</span>
+                        <span class="reco-label">Recommended</span>
+                        <span class="reco-value" id="intensityRecoValue">—</span>
+                    </button>
+                </div>
+            </div>
+            <input type="range" id="intensitySlider" min="0" max="255" value="128">
+        </div>
+
+        <div class="recommend-row">
+            <button class="btn btn-sm btn-primary" id="recommendBtn" type="button">
+                Apply recommended look
+            </button>
+            <span class="muted" id="recommendHint">—</span>
+        </div>
+
+        <div id="customSliders" class="hidden">
+            <div class="field">
+                <label>Custom 1 <span class="range-value" id="c1Value">128</span></label>
+                <input type="range" id="c1Slider" min="0" max="255" value="128">
+            </div>
+            <div class="field">
+                <label>Custom 2 <span class="range-value" id="c2Value">128</span></label>
+                <input type="range" id="c2Slider" min="0" max="255" value="128">
+            </div>
+            <div class="field">
+                <label>Custom 3 <span class="range-value" id="c3Value">16</span></label>
+                <input type="range" id="c3Slider" min="0" max="255" value="16">
+            </div>
+        </div>
+
+        <p class="panel-note" style="margin-top:16px;">
+            Picking an effect applies WLED's recommended palette, speed and
+            intensity for it. Drag a slider to fine-tune, then use its
+            ✦ Recommended chip to snap that slider back.
+        </p>
+
+        <div class="preview-box">
+            <div class="led-preview" id="ledPreview"></div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='custom.js') }}"></script>
+{% endblock %}

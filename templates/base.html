@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ESP 32 RGB Controller{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='v2.css') }}">
+</head>
+<body>
+    <div class="topbar">
+        <a class="brand" href="/">
+            <span class="brand-mark">⚡</span>
+            <span class="brand-name">ESP 32 RGB Controller</span>
+        </a>
+
+        <nav class="nav">
+            <a href="/" class="nav-link {% if active == 'home' %}active{% endif %}">Home</a>
+            <a href="/custom" class="nav-link {% if active == 'custom' %}active{% endif %}">Custom</a>
+            <a href="/settings" class="nav-link {% if active == 'settings' %}active{% endif %}">Settings</a>
+        </nav>
+
+        <div class="topbar-right">
+            <div class="conn-pill" id="connPill">
+                <span class="conn-dot" id="connDot"></span>
+                <span id="connText">Connecting…</span>
+            </div>
+            <button class="power-btn" id="powerBtn" title="Power">
+                <span class="power-icon">⏻</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="toast-stack" id="toastStack"></div>
+
+    <main class="page">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="{{ url_for('static', filename='v2.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

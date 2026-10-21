@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified LED Controller</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ Unified LED Controller</h1>
+            <p class="subtitle">System Stats • Music Reactive • Screen Capture</p>
+        </header>
+
+        <!-- Connection Status -->
+        <div class="card status-card">
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Initializing...</span>
+            </div>
+            <div class="stats-line" id="statsLine">
+                <span id="fpsDisplay">0 fps</span>
+                <span id="frameDisplay">0 frames</span>
+                <span id="deviceStatus" style="margin-left: auto;">Device: <span id="deviceStatusText">Checking...</span></span>
+            </div>
+            <div id="errorDisplay" class="error-message" style="display: none;"></div>
+        </div>
+
+        <!-- Mode Control -->
+        <div class="card">
+            <h2>🎮 Mode Selection</h2>
+            <div class="mode-selector">
+                <button class="mode-btn" data-mode="off" id="modeOff">Off</button>
+                <button class="mode-btn" data-mode="system_stats" id="modeSystem">System Stats</button>
+                <button class="mode-btn" data-mode="music" id="modeMusic">Music Reactive</button>
+                <button class="mode-btn" data-mode="screen" id="modeScreen">Screen Capture</button>
+            </div>
+            <div class="toggle-container">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="enableToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+                <label for="enableToggle">Enable LED Control</label>
+            </div>
+        </div>
+
+        <!-- LED Preview (all modes) -->
+        <div class="card">
+            <h2>💡 LED Preview</h2>
+            <div class="led-preview" id="ledPreview">
+                <div class="led-strip">
+                    <div class="led"></div>
+                    <div class="led"></div>
+                    <div class="led"></div>
+                    <div class="led"></div>
+                    <div class="led"></div>
+                    <div class="led"></div>
+                    <div class="led"></div>
+                    <div class="led"></div>
+                </div>
+                <p class="led-preview-label" id="ledLabel">8 LEDs</p>
+            </div>
+        </div>
+
+        <!-- System Stats Mode Settings -->
+        <div class="card mode-settings" id="settingsSystemStats" style="display: none;">
+            <h2>📊 System Stats Settings</h2>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="updateInterval">Update Interval (seconds)</label>
+                    <input type="number" id="updateInterval" min="0.5" max="10" step="0.1" value="1.1">
+                </div>
+                <div class="form-group">
+                    <label for="threshold">High Usage Threshold (%)</label>
+                    <input type="number" id="threshold" min="50" max="100" value="90">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="brightnessMin">Min Brightness</label>
+                    <input type="range" id="brightnessMin" min="0" max="255" value="20">
+                    <span id="brightnessMinValue">20</span>
+                </div>
+                <div class="form-group">
+                    <label for="brightnessMax">Max Brightness</label>
+                    <input type="range" id="brightnessMax" min="0" max="255" value="255">
+                    <span id="brightnessMaxValue">255</span>
+                </div>
+            </div>
+
+            <div class="stat-display" id="systemStatsDisplay" style="display: none;">
+                <div class="stat-item">
+                    <span>CPU:</span> <span id="cpuStat">0%</span>
+                </div>
+                <div class="stat-item">
+                    <span>RAM:</span> <span id="ramStat">0%</span>
+                </div>
+                <div class="stat-item">
+                    <span>GPU:</span> <span id="gpuStat">N/A</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Music Mode Settings -->
+        <div class="card mode-settings" id="settingsMusic" style="display: none;">
+            <h2>🎵 Music Reactive Settings</h2>
+            
+            <div class="form-group">
+                <label for="musicRenderer">Visual Effect</label>
+                <select id="musicRenderer">
+                    <option value="spectrum">Spectrum Bars</option>
+                    <option value="bass_pulse">Bass Pulse</option>
+                    <option value="vu_meter">VU Meter</option>
+                    <option value="beat_flash">Beat Flash</option>
+                    <option value="rainbow">Rainbow Audio</option>
+                    <option value="mid_wave">Mid-Freq Wave</option>
+                    <option value="energy_ripple">Energy Ripple</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="musicColorPalette">Color Palette</label>
+                <select id="musicColorPalette">
+                    <option value="default">Default</option>
+                    <option value="blue_red">Blue → Red</option>
+                    <option value="purple_yellow">Purple → Yellow</option>
+                    <option value="green_red">Green → Red</option>
+                    <option value="mono">Monochrome White</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="musicSource">Audio Source</label>
+                <select id="musicSource">
+                    <option value="system">System Audio (Loopback)</option>
+                    <option value="mic">Microphone</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="musicFps">Frame Rate (fps)</label>
+                <input type="number" id="musicFps" min="15" max="120" value="60">
+            </div>
+
+            <div class="audio-status" id="audioStatus" style="display: none;">
+                <div class="status-line">
+                    <span>🎤 <span id="audioDevice">-</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen Mode Settings -->
+        <div class="card mode-settings" id="settingsScreen" style="display: none;">
+            <h2>🖥️ Screen Capture Settings</h2>
+            
+            <div class="form-group">
+                <label for="screenMode">Mapping Mode</label>
+                <select id="screenMode">
+                    <option value="average">Average Color (Bias Light)</option>
+                    <option value="bands">Vertical Bands (Left→Right)</option>
+                    <option value="edges">Edge Zones (Ambilight)</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="screenMonitor">Monitor</label>
+                    <input type="number" id="screenMonitor" min="1" max="4" value="1">
+                </div>
+                <div class="form-group">
+                    <label for="screenFps">Frame Rate (fps)</label>
+                    <input type="number" id="screenFps" min="10" max="60" value="30">
+                </div>
+            </div>
+
+            <div class="screen-status" id="screenStatus" style="display: none;">
+                <div class="status-line">
+                    <span>📺 Monitor <span id="screenMonitorDisplay">1</span></span>
+                    <span><span id="screenActualFps">0</span> fps</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Configuration -->
+        <div class="card">
+            <h2>⚙️ Device Configuration</h2>
+            
+            <div class="form-group">
+                <label for="esp32Ip">ESP32 IP Address</label>
+                <div class="input-with-button">
+                    <input type="text" id="esp32Ip" placeholder="192.168.x.x">
+                    <button class="btn-secondary" id="testConnection">Test</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="ledCount">LED Count</label>
+                <input type="number" id="ledCount" min="1" max="512" value="8">
+            </div>
+
+            <button class="btn-primary" id="saveConfig">💾 Save All Settings</button>
+        </div>
+
+        <footer>
+            <p>Made by Asif • Powered by WLED (DDP) & Flask</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

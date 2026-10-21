@@ -1,0 +1,592 @@
+{% extends "base.html" %}
+{% set active = 'home' %}
+{% block title %}ESP 32 RGB Controller — Home{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Choose a mode</h1>
+    <p>Pick what your lights should react to. Switching is instant.</p>
+</div>
+
+<div class="mode-grid">
+    <button class="mode-card" data-mode="performance">
+        <span class="mode-badge">Active</span>
+        <div class="mode-icon">📊</div>
+        <h3>Performance</h3>
+        <p>Rotates CPU → RAM → GPU, one colour per metric, every few seconds.</p>
+    </button>
+
+    <button class="mode-card" data-mode="music">
+        <span class="mode-badge">Active</span>
+        <div class="mode-icon">🎵</div>
+        <h3>Music</h3>
+        <p>Lights the strip only while sound is playing. Silence means dark.</p>
+    </button>
+
+    <button class="mode-card" data-mode="screen">
+        <span class="mode-badge">Active</span>
+        <div class="mode-icon">🖥️</div>
+        <h3>Screen</h3>
+        <p>Mirrors your display — dominant colour, average, bands or edges.</p>
+    </button>
+
+    <button class="mode-card" data-mode="custom">
+        <span class="mode-badge">Active</span>
+        <div class="mode-icon">🎨</div>
+        <h3>Custom</h3>
+        <p>Colour wheel, WLED effects and palettes. Full manual control.</p>
+    </button>
+</div>
+
+<div class="status-strip">
+    <div class="strip-item">
+        <span>Device</span>
+        <strong id="stDevice">—</strong>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="strip-item">
+        <span>Mode</span>
+        <strong id="stMode">—</strong>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="strip-item">
+        <span>Frame rate</span>
+        <strong id="stFps">0 fps</strong>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="strip-item" id="stMetricWrap">
+        <span>Now showing</span>
+        <strong id="stMetric">—</strong>
+    </div>
+</div>
+
+<div class="home-grid">
+    <section class="panel">
+        <h2>Live system</h2>
+        <div class="stat-list">
+            <div class="stat-line">
+                <span class="stat-name">CPU</span>
+                <div class="metric-bar"><div class="metric-fill" id="barCpu"></div></div>
+                <span class="stat-val" id="valCpu">—</span>
+            </div>
+            <div class="stat-line">
+                <span class="stat-name">RAM</span>
+                <div class="metric-bar"><div class="metric-fill" id="barRam"></div></div>
+                <span class="stat-val" id="valRam">—</span>
+            </div>
+            <div class="stat-line">
+                <span class="stat-name">GPU</span>
+                <div class="metric-bar"><div class="metric-fill" id="barGpu"></div></div>
+                <span class="stat-val" id="valGpu">—</span>
+            </div>
+        </div>
+        <p class="panel-note" style="margin:16px 0 0;" id="gpuNote"></p>
+    </section>
+
+    <section class="panel">
+        <h2 id="optTitle">Mode options</h2>
+        <div id="optBody"></div>
+    </section>
+</div>
+
+<div class="panel">
+    <h2>Live output</h2>
+    <div class="led-preview" id="ledPreview"></div>
+    <p class="muted" style="margin-top:14px;text-align:center;">
+        Preview mirrors the colours being sent to the strip.
+    </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MODE_LABELS = {
+    performance: 'Performance',
+    music: 'Music',
+    screen: 'Screen',
+    custom: 'Custom',
+    off: 'Off',
+};
+
+const MODE_COLORS = {
+    performance: 'linear-gradient(90deg,#22c55e,#eab308,#ef4444)',
+    music: 'linear-gradient(90deg,#3b82f6,#22d3ee)',
+    screen: 'linear-gradient(90deg,#06b6d4,#6366f1)',
+    custom: 'linear-gradient(90deg,#a855f7,#ec4899)',
+};
+
+const RENDERERS = {
+    spectrum: 'Spectrum bars',
+    mirror_spectrum: 'Mirror spectrum',
+    bass_pulse: 'Bass pulse',
+    vu_meter: 'VU meter',
+    beat_pulse: 'Beat pulse',
+    beat_flash: 'Beat flash',
+    beat_spectrum: 'Beat spectrum',
+    rainbow: 'Rainbow',
+    mid_wave: 'Mid-frequency wave',
+    energy_ripple: 'Energy ripple',
+    comet: 'Comet',
+    duo_tone: 'Duo tone (bass / treble)',
+};
+
+const PALETTES = {
+    default: 'Spectrum',
+    blue_red: 'Blue → Red',
+    purple_yellow: 'Purple → Yellow',
+    green_red: 'Green → Red',
+    ocean: 'Ocean',
+    fire: 'Fire',
+    mono: 'Monochrome',
+    custom: 'Custom two colours',
+};
+
+function hexToRgb(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+    if (!m) return [0, 0, 0];
+    const n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgbToHex(rgb) {
+    return '#' + rgb.map(v => Math.max(0, Math.min(255, Number(v) || 0))
+        .toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+let renderedOptionsFor = null;
+let wledPalettePromise = null;
+
+/* Fetch WLED's palette collection once per page load (names + gradients). */
+function loadWledPalettes() {
+    if (!wledPalettePromise) {
+        wledPalettePromise = apiGet('/api/palettes')
+            .then(data => data.items || [])
+            .catch(() => []);
+    }
+    return wledPalettePromise;
+}
+
+/* ------------------------------------------------------------------ preview */
+
+function buildPreview(count) {
+    const box = document.getElementById('ledPreview');
+    if (!box || box.dataset.count === String(count)) return;
+    box.innerHTML = '';
+    for (let i = 0; i < count; i++) {
+        const d = document.createElement('div');
+        d.className = 'led-dot';
+        box.appendChild(d);
+    }
+    box.dataset.count = count;
+}
+
+function paintPreview(colors) {
+    const dots = document.querySelectorAll('#ledPreview .led-dot');
+    colors.forEach((c, i) => {
+        if (!dots[i]) return;
+        const [r, g, b] = c;
+        dots[i].style.background = `rgb(${r},${g},${b})`;
+        const lum = (r + g + b) / 3;
+        dots[i].style.boxShadow = lum > 8
+            ? `0 0 16px rgba(${r},${g},${b},0.75), inset 0 0 8px rgba(255,255,255,0.25)`
+            : 'inset 0 0 10px rgba(0,0,0,0.8)';
+    });
+}
+
+function markActive(mode) {
+    document.querySelectorAll('.mode-card').forEach(c => {
+        c.classList.toggle('active', c.dataset.mode === mode);
+    });
+}
+
+/* ------------------------------------------------------------- mode options */
+
+function el(tag, props = {}, children = []) {
+    const node = document.createElement(tag);
+    Object.assign(node, props);
+    children.forEach(c => node.appendChild(c));
+    return node;
+}
+
+function labelled(text, valueText, input) {
+    const wrap = el('div', { className: 'field' });
+    const label = el('label', { textContent: text });
+    if (valueText) {
+        const span = el('span', { className: 'range-value', textContent: valueText.value });
+        span.id = valueText.id;
+        span.style.marginLeft = '8px';
+        label.appendChild(span);
+    }
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    return wrap;
+}
+
+function renderOptions(cfg) {
+    const body = document.getElementById('optBody');
+    const title = document.getElementById('optTitle');
+    if (!body) return;
+
+    const mode = cfg.mode;
+    if (renderedOptionsFor === mode) return;
+    renderedOptionsFor = mode;
+    body.innerHTML = '';
+    title.textContent = `${MODE_LABELS[mode] || 'Mode'} options`;
+
+    if (mode === 'off') {
+        body.appendChild(el('p', {
+            className: 'panel-note',
+            textContent: 'Output is off. Press the power button or pick a mode to light the strip.',
+        }));
+        return;
+    }
+
+    if (mode === 'performance') {
+        const range = el('input', {
+            type: 'range', id: 'optCycle', min: '2', max: '20', step: '0.5',
+            value: String(cfg.perf_test_cycle_time || 5),
+        });
+        body.appendChild(labelled('Seconds per metric', { id: 'optCycleVal' },
+            range));
+        range.addEventListener('input', e => {
+            document.getElementById('optCycleVal').textContent =
+                Number(e.target.value).toFixed(1);
+            setConfig({ perf_test_cycle_time: Number(e.target.value) });
+        });
+        document.getElementById('optCycleVal').textContent =
+            Number(cfg.perf_test_cycle_time || 5).toFixed(1);
+
+        // Three-point ramps: a compact preview of what each metric will show.
+        const key = el('div', { className: 'key-list' });
+        [['CPU', 'perf_cpu_colors'], ['RAM', 'perf_ram_colors'],
+         ['GPU', 'perf_gpu_colors']].forEach(([name, keyName]) => {
+            const row = el('div', { className: 'key-row' });
+            row.appendChild(el('strong', { textContent: name }));
+            const bar = el('span', { className: 'ramp-mini' });
+            bar.style.background = perfRampCss(
+                cfg[keyName] || PERF_DEFAULT_RAMPS[keyName]);
+            row.appendChild(bar);
+            key.appendChild(row);
+        });
+        body.appendChild(key);
+
+        body.appendChild(el('a', {
+            className: 'btn btn-sm',
+            href: '/settings#performance',
+            textContent: 'Edit metric colours',
+            style: 'margin-top:14px; display:inline-flex;',
+        }));
+
+        const note = el('p', {
+            className: 'panel-note', style: 'margin-top:14px;',
+            textContent: `Above ${cfg.high_usage_threshold || 90}% the strip turns solid red.`,
+        });
+        body.appendChild(note);
+    }
+
+    if (mode === 'music') {
+        const rendererSel = el('select', { id: 'optRenderer' });
+        Object.entries(RENDERERS).forEach(([v, label]) => {
+            const o = el('option', { value: v, textContent: label });
+            if ((cfg.music_renderer || 'spectrum') === v) o.selected = true;
+            rendererSel.appendChild(o);
+        });
+        rendererSel.addEventListener('change', e =>
+            setConfig({ music_renderer: e.target.value }));
+        body.appendChild(labelled('Effect', null, rendererSel));
+
+        // --- palette picker: built-ins + every palette the WLED device has ---
+        body.appendChild(el('label', {
+            className: 'field-label', textContent: 'Colour palette',
+        }));
+
+        const list = el('div', { className: 'palette-list', id: 'optPaletteList' });
+        body.appendChild(list);
+
+        const addPaletteItem = (value, name, gradient) => {
+            const btn = el('button', {
+                type: 'button', className: 'palette-item', title: name,
+            });
+            btn.dataset.value = value;
+            if ((cfg.music_color_palette || 'default') === value) {
+                btn.classList.add('active');
+            }
+            btn.appendChild(el('span', { className: 'palette-name', textContent: name }));
+            const bar = el('span', { className: 'palette-bar' });
+            bar.style.background = gradient;
+            btn.appendChild(bar);
+
+            btn.addEventListener('click', () => {
+                list.querySelectorAll('.palette-item').forEach(x => x.classList.remove('active'));
+                btn.classList.add('active');
+                pair.classList.toggle('hidden-field', value !== 'custom');
+                setConfig({ music_color_palette: value });
+                toast(`Palette: ${name}`, 'success');
+            });
+            list.appendChild(btn);
+            return btn;
+        };
+
+        [
+            ['default', 'Spectrum', 'linear-gradient(90deg,#005aff,#00dcdc,#ffd200,#ff2850)'],
+            ['blue_red', 'Blue → Red', 'linear-gradient(90deg,#003cff,#5a00ff,#ff0046)'],
+            ['purple_yellow', 'Purple → Yellow', 'linear-gradient(90deg,#9600ff,#ff46c8,#ffdc00)'],
+            ['green_red', 'Green → Red', 'linear-gradient(90deg,#00dc46,#bee600,#ff1e14)'],
+            ['ocean', 'Ocean', 'linear-gradient(90deg,#001ea0,#0096ff,#00ffcd)'],
+            ['fire', 'Fire', 'linear-gradient(90deg,#aa0000,#ff5000,#ffdc00)'],
+            ['mono', 'Monochrome', 'linear-gradient(90deg,#ffffff,#ffffff)'],
+        ].forEach(([v, n, g]) => addPaletteItem(v, n, g));
+
+        // Two-colour mix picker (also previews the "custom" palette entry)
+        const pair = el('div', { className: 'field hidden-field', id: 'optColorPair' });
+        pair.appendChild(el('label', { textContent: 'Two-colour mix' }));
+        const pairRow = el('div', { className: 'color-pair' });
+
+        const customGradient = (a, b) =>
+            `linear-gradient(90deg, rgb(${a.join(',')}), rgb(${b.join(',')}))`;
+
+        const fromWrap = el('label', { className: 'color-field', title: 'First colour' });
+        const fromInput = el('input', {
+            type: 'color', id: 'optColorFrom',
+            value: rgbToHex(cfg.music_color_from || [0, 120, 255]),
+        });
+        const toWrap = el('label', { className: 'color-field', title: 'Second colour' });
+        const toInput = el('input', {
+            type: 'color', id: 'optColorTo',
+            value: rgbToHex(cfg.music_color_to || [255, 40, 80]),
+        });
+
+        const customBtn = addPaletteItem(
+            'custom', 'Custom two colours',
+            customGradient(hexToRgb(fromInput.value), hexToRgb(toInput.value)));
+
+        fromInput.addEventListener('input', e => {
+            const rgb = hexToRgb(e.target.value);
+            customBtn.querySelector('.palette-bar').style.background =
+                customGradient(rgb, hexToRgb(toInput.value));
+            setConfig({ music_color_from: rgb });
+        });
+        fromWrap.appendChild(fromInput);
+        fromWrap.appendChild(el('span', { textContent: 'From' }));
+
+        toInput.addEventListener('input', e => {
+            const rgb = hexToRgb(e.target.value);
+            customBtn.querySelector('.palette-bar').style.background =
+                customGradient(hexToRgb(fromInput.value), rgb);
+            setConfig({ music_color_to: rgb });
+        });
+        toWrap.appendChild(toInput);
+        toWrap.appendChild(el('span', { textContent: 'To' }));
+
+        pairRow.appendChild(fromWrap);
+        pairRow.appendChild(toWrap);
+        pair.appendChild(pairRow);
+        if ((cfg.music_color_palette || 'default') === 'custom') {
+            pair.classList.remove('hidden-field');
+        }
+        body.appendChild(pair);
+
+        // Every palette the strip's own WLED build knows about
+        const wledHeader = el('div', {
+            className: 'palette-group', textContent: 'WLED palettes',
+        });
+        list.appendChild(wledHeader);
+
+        loadWledPalettes().then(items => {
+            items.forEach(entry => {
+                addPaletteItem(entry.value, entry.name, entry.gradient);
+            });
+        });
+
+        const meter = el('div', { className: 'meter' });
+        ['bass', 'mid', 'treble'].forEach(band => {
+            const row = el('div', { className: 'meter-row' });
+            row.appendChild(el('span', {
+                className: 'stat-name', textContent: band.toUpperCase(),
+            }));
+            const bar = el('div', { className: 'metric-bar' });
+            const fill = el('div', { className: 'metric-fill' });
+            fill.id = `meter-${band}`;
+            fill.style.background = MODE_COLORS.music;
+            bar.appendChild(fill);
+            row.appendChild(bar);
+            meter.appendChild(row);
+        });
+        body.appendChild(meter);
+
+        body.appendChild(el('p', {
+            className: 'panel-note', style: 'margin-top:16px;',
+            textContent: 'The strip stays dark while nothing is playing. '
+                + 'It confirms the switch with a blue/red flash.',
+        }));
+    }
+
+    if (mode === 'screen') {
+        body.appendChild(el('p', {
+            className: 'panel-note',
+            textContent: 'Choose how the screen is turned into light.',
+        }));
+
+        const group = el('div', { className: 'seg-group' });
+        [['dominant', 'Dominant colour'], ['average', 'Average'],
+         ['bands', 'Vertical bands'], ['edges', 'Edge zones']].forEach(([v, label]) => {
+            const b = el('button', {
+                className: 'seg-btn' + ((cfg.screen_mode || 'dominant') === v ? ' active' : ''),
+                textContent: label, type: 'button',
+            });
+            b.addEventListener('click', () => {
+                group.querySelectorAll('.seg-btn').forEach(x => x.classList.remove('active'));
+                b.classList.add('active');
+                setConfig({ screen_mode: v });
+                toast(`Screen: ${label}`, 'success');
+            });
+            group.appendChild(b);
+        });
+        body.appendChild(group);
+
+        body.appendChild(el('p', {
+            className: 'panel-note', style: 'margin-top:16px;',
+            textContent: '"Dominant colour" picks the most vivid colour on screen. '
+                + 'Whites and greys are ignored, so green text on a white page '
+                + 'shows green instead of washing out to white.',
+        }));
+
+        const fps = el('input', {
+            type: 'range', id: 'optScreenFps', min: '10', max: '60', step: '1',
+            value: String(cfg.screen_fps || 30),
+        });
+        body.appendChild(labelled('Frames per second', { id: 'optScreenFpsVal' }, fps));
+        document.getElementById('optScreenFpsVal').textContent =
+            String(cfg.screen_fps || 30);
+        fps.addEventListener('input', e => {
+            document.getElementById('optScreenFpsVal').textContent = e.target.value;
+            setConfig({ screen_fps: Number(e.target.value) });
+        });
+    }
+
+    if (mode === 'custom') {
+        body.appendChild(el('p', {
+            className: 'panel-note',
+            textContent: 'Pick any colour, then add one of WLED\'s built-in effects, '
+                + 'palettes and speeds.',
+        }));
+        const link = el('a', {
+            className: 'btn btn-primary', href: '/custom',
+            textContent: 'Open custom controls',
+        });
+        body.appendChild(link);
+
+        const chipRow = el('div', { className: 'key-row', style: 'margin-top:20px;' });
+        const chip = el('span', { className: 'color-chip' });
+        const c = cfg.custom_color || [255, 0, 0];
+        chip.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+        chip.style.width = '28px';
+        chip.style.height = '28px';
+        chipRow.appendChild(chip);
+        chipRow.appendChild(el('span', {
+            className: 'muted',
+            textContent: `Brightness ${cfg.custom_brightness ?? 200} · effect #${cfg.custom_effect ?? 0}`,
+        }));
+        body.appendChild(chipRow);
+    }
+}
+
+/* -------------------------------------------------------------------- stats */
+
+function paintBar(id, value, gradient) {
+    const bar = document.getElementById(id);
+    if (!bar) return;
+    bar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+    bar.style.background = gradient;
+}
+
+function onConfigLoaded(cfg) {
+    buildPreview(cfg.led_count || 8);
+    markActive(cfg.mode);
+    renderOptions(cfg);
+}
+
+function onModeChanged(mode) {
+    markActive(mode);
+    renderedOptionsFor = null;
+}
+
+function onStatusUpdate(data) {
+    if (!data) return;
+    const cfg = data.config || {};
+    const count = cfg.led_count || 8;
+    const stats = data.stats || {};
+
+    buildPreview(count);
+    markActive(cfg.mode);
+    renderOptions(cfg);
+
+    document.getElementById('stDevice').textContent =
+        data.device_online === null ? 'Checking…'
+            : (data.device_online ? 'Online' : 'Offline');
+    document.getElementById('stMode').textContent = MODE_LABELS[cfg.mode] || cfg.mode;
+    document.getElementById('stFps').textContent =
+        `${(data.frame_stats?.fps || 0).toFixed(1)} fps`;
+
+    // Live CPU / RAM / GPU
+    const cpu = stats.cpu ?? 0;
+    const ram = stats.ram ?? 0;
+    const gpu = stats.gpu ?? 0;
+    document.getElementById('valCpu').textContent = `${cpu.toFixed(0)}%`;
+    document.getElementById('valRam').textContent = `${ram.toFixed(0)}%`;
+    document.getElementById('valGpu').textContent =
+        stats.gpu_available ? `${gpu.toFixed(0)}%` : 'n/a';
+
+    const cpuRgb = perfRampAt(cfg.perf_cpu_colors, cpu);
+    const ramRgb = perfRampAt(cfg.perf_ram_colors, ram);
+    const gpuRgb = perfRampAt(cfg.perf_gpu_colors, gpu);
+    paintBar('barCpu', cpu, `rgb(${cpuRgb.join(',')})`);
+    paintBar('barRam', ram, `rgb(${ramRgb.join(',')})`);
+    paintBar('barGpu', gpu, `rgb(${gpuRgb.join(',')})`);
+
+    document.getElementById('gpuNote').textContent = stats.gpu_available
+        ? `GPU: ${stats.gpu_name || 'GPU'}`
+        : 'No GPU detected — CPU and RAM only.';
+
+    // Rotating metric indicator
+    const metricWrap = document.getElementById('stMetricWrap');
+    if (cfg.mode === 'performance') {
+        metricWrap.classList.remove('hidden');
+        const m = (data.perf_test_state?.current || 'cpu').toUpperCase();
+        let val = '';
+        if (m === 'CPU') val = ` · ${cpu.toFixed(0)}%`;
+        if (m === 'RAM') val = ` · ${ram.toFixed(0)}%`;
+        if (m === 'GPU') val = stats.gpu_available ? ` · ${gpu.toFixed(0)}%` : ' · n/a';
+        document.getElementById('stMetric').textContent = m + val;
+    } else {
+        metricWrap.classList.add('hidden');
+    }
+
+    // Music meters
+    const analysis = data.audio_analysis || {};
+    ['bass', 'mid', 'treble'].forEach(band => {
+        const fill = document.getElementById(`meter-${band}`);
+        if (!fill) return;
+        const value = (analysis[band] ?? 0) * 100;
+        fill.style.width = `${Math.max(0, Math.min(100, value))}%`;
+    });
+
+    // Output preview
+    if (data.preview_colors?.length) {
+        paintPreview(data.preview_colors);
+    } else {
+        paintPreview(new Array(count).fill([0, 0, 0]));
+    }
+}
+
+document.querySelectorAll('.mode-card').forEach(card => {
+    card.addEventListener('click', async () => {
+        const mode = card.dataset.mode;
+        markActive(mode);
+        onModeChanged(mode);
+        await setConfig({ mode, power_on: true });
+        toast(`${MODE_LABELS[mode]} mode`, 'success');
+    });
+});
+</script>
+{% endblock %}

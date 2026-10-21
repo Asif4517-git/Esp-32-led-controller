@@ -1,0 +1,41 @@
+{
+  "esp32_ip": "wled.local",
+  "led_count": 8,
+
+  "mode": "off",
+  "last_mode": "performance",
+  "power_on": true,
+  "resume_on_start": true,
+
+  "perf_test_cycle_time": 5.0,
+  "high_usage_threshold": 90,
+  "brightness_min": 20,
+  "brightness_max": 255,
+  "perf_cpu_colors": [[0, 220, 70], [255, 190, 0], [255, 30, 20]],
+  "perf_ram_colors": [[0, 60, 160], [0, 100, 220], [0, 140, 255]],
+  "perf_gpu_colors": [[70, 0, 140], [130, 35, 200], [190, 70, 255]],
+  "perf_dim_with_load": false,
+
+  "music_renderer": "spectrum",
+  "music_color_palette": "default",
+  "music_color_from": [0, 120, 255],
+  "music_color_to": [255, 40, 80],
+  "music_source": "system",
+  "music_device_id": null,
+  "music_fps": 60,
+  "music_sensitivity": 1.6,
+
+  "screen_mode": "dominant",
+  "screen_monitor": 1,
+  "screen_fps": 30,
+
+  "custom_color": [255, 0, 0],
+  "custom_brightness": 200,
+  "custom_effect": 0,
+  "custom_effect_speed": 128,
+  "custom_effect_intensity": 128,
+  "custom_palette": 0,
+  "custom_c1": 128,
+  "custom_c2": 128,
+  "custom_c3": 16
+}
